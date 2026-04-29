@@ -11,6 +11,13 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import {
+  formatAuthError,
+  updateCurrentUserDisplayName,
+  updateCurrentUserPasswordWithCurrent,
+} from '../services/authService';
+import { syncOwnerNameInListings } from '../services/listingService';
+import { updateUserDisplayName } from '../services/userProfileService';
 import { Listing, UpdateListingPayload } from '../types/marketplace';
 
 type AccountScreenProps = {
@@ -21,6 +28,17 @@ type AccountScreenProps = {
 
 export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing }: AccountScreenProps) {
   const { profile, user, signOutUser } = useAuth();
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newDisplayName, setNewDisplayName] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [editingListingId, setEditingListingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -36,6 +54,78 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
   );
 
   const editingListing = ownListings.find((entry) => entry.id === editingListingId) ?? null;
+
+  function openNameModal() {
+    setNewDisplayName(profile?.displayName ?? '');
+    setShowNameModal(true);
+  }
+
+  function openPasswordModal() {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setShowPasswordModal(true);
+  }
+
+  async function saveDisplayName() {
+    if (!user || isUpdatingName) {
+      return;
+    }
+
+    const cleanName = newDisplayName.trim();
+    if (cleanName.length < 2) {
+      Alert.alert('Nume invalid', 'Numele trebuie sa aiba cel putin 2 caractere.');
+      return;
+    }
+
+    setIsUpdatingName(true);
+    try {
+      await updateCurrentUserDisplayName(cleanName);
+      await updateUserDisplayName(user.uid, cleanName);
+      await syncOwnerNameInListings(user.uid, cleanName);
+      setShowNameModal(false);
+      Alert.alert('Succes', 'Numele a fost actualizat.');
+    } catch (error: unknown) {
+      Alert.alert('Eroare', formatAuthError(error));
+    } finally {
+      setIsUpdatingName(false);
+    }
+  }
+
+  async function savePassword() {
+    if (isUpdatingPassword) {
+      return;
+    }
+
+    if (!currentPassword) {
+      Alert.alert('Parola actuala lipseste', 'Introdu parola actuala pentru confirmare.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Parola invalida', 'Parola trebuie sa aiba minimum 6 caractere.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      Alert.alert('Parole diferite', 'Parolele nu coincid.');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      await updateCurrentUserPasswordWithCurrent(currentPassword, newPassword);
+      setShowPasswordModal(false);
+      Alert.alert('Succes', 'Parola a fost actualizata.');
+    } catch (error: unknown) {
+      Alert.alert('Eroare', formatAuthError(error));
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  }
 
   function openEditModal(listing: Listing) {
     setEditingListingId(listing.id);
@@ -105,6 +195,14 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
           <Text style={styles.item}>Nume: {profile?.displayName ?? '-'}</Text>
           <Text style={styles.item}>Email: {profile?.email ?? '-'}</Text>
           <Text style={styles.item}>Rol: {profile?.role ?? '-'}</Text>
+          <View style={styles.rowActions}>
+            <Pressable style={styles.secondaryButton} onPress={openNameModal}>
+              <Text style={styles.secondaryButtonText}>Schimba nume</Text>
+            </Pressable>
+            <Pressable style={styles.secondaryButton} onPress={openPasswordModal}>
+              <Text style={styles.secondaryButtonText}>Schimba parola</Text>
+            </Pressable>
+          </View>
           <Pressable style={styles.button} onPress={signOutUser}>
             <Text style={styles.buttonText}>Deconectare</Text>
           </Pressable>
@@ -192,6 +290,89 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
               </Pressable>
               <Pressable style={styles.modalSave} onPress={() => void saveEdit()} disabled={isSaving}>
                 <Text style={styles.modalSaveText}>{isSaving ? 'Se salveaza...' : 'Salveaza'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showNameModal} transparent animationType="fade" onRequestClose={() => setShowNameModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Schimba numele</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nume nou"
+              placeholderTextColor="#8fa2b8"
+              value={newDisplayName}
+              onChangeText={setNewDisplayName}
+            />
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalCancel} onPress={() => setShowNameModal(false)}>
+                <Text style={styles.modalCancelText}>Renunta</Text>
+              </Pressable>
+              <Pressable style={styles.modalSave} onPress={() => void saveDisplayName()} disabled={isUpdatingName}>
+                <Text style={styles.modalSaveText}>{isUpdatingName ? 'Se salveaza...' : 'Salveaza'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Schimba parola</Text>
+            <View style={styles.passwordField}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Parola actuala"
+                placeholderTextColor="#8fa2b8"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry={!showCurrentPassword}
+              />
+              <Pressable style={styles.revealButton} onPress={() => setShowCurrentPassword((prev) => !prev)}>
+                <Text style={styles.revealButtonText}>{showCurrentPassword ? 'Ascunde' : 'Arata'}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.passwordField}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Parola noua"
+                placeholderTextColor="#8fa2b8"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!showNewPassword}
+              />
+              <Pressable style={styles.revealButton} onPress={() => setShowNewPassword((prev) => !prev)}>
+                <Text style={styles.revealButtonText}>{showNewPassword ? 'Ascunde' : 'Arata'}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.passwordField}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Confirma parola"
+                placeholderTextColor="#8fa2b8"
+                value={confirmNewPassword}
+                onChangeText={setConfirmNewPassword}
+                secureTextEntry={!showConfirmPassword}
+              />
+              <Pressable style={styles.revealButton} onPress={() => setShowConfirmPassword((prev) => !prev)}>
+                <Text style={styles.revealButtonText}>{showConfirmPassword ? 'Ascunde' : 'Arata'}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalCancel} onPress={() => setShowPasswordModal(false)}>
+                <Text style={styles.modalCancelText}>Renunta</Text>
+              </Pressable>
+              <Pressable style={styles.modalSave} onPress={() => void savePassword()} disabled={isUpdatingPassword}>
+                <Text style={styles.modalSaveText}>{isUpdatingPassword ? 'Se salveaza...' : 'Actualizeaza'}</Text>
               </Pressable>
             </View>
           </View>
@@ -338,6 +519,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: '#e5f0ff',
+  },
+  passwordField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  passwordInput: {
+    flex: 1,
+  },
+  revealButton: {
+    borderWidth: 1,
+    borderColor: '#345172',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#102133',
+  },
+  revealButtonText: {
+    color: '#d5e5f7',
+    fontWeight: '700',
+    fontSize: 12,
   },
   inputDescription: {
     borderRadius: 20,

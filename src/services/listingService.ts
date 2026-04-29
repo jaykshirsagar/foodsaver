@@ -4,12 +4,15 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { UserProfile } from '../types/auth';
@@ -22,6 +25,22 @@ type PurchasedListingsCallback = (listingIds: string[]) => void;
 
 function listingsCollection() {
   return collection(db, 'listings');
+}
+
+export async function syncOwnerNameInListings(ownerUid: string, displayName: string): Promise<void> {
+  const listingsQuery = query(listingsCollection(), where('ownerUid', '==', ownerUid));
+  const snapshot = await getDocs(listingsQuery);
+
+  if (snapshot.empty) {
+    return;
+  }
+
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((item) => {
+    batch.update(item.ref, { owner: displayName.trim() });
+  });
+
+  await batch.commit();
 }
 
 function userPurchasesCollection(userUid: string) {

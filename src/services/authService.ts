@@ -1,10 +1,14 @@
 import {
+  EmailAuthProvider,
   AuthError,
   User,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
   signOut,
+  updatePassword,
+  updateProfile,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -76,4 +80,36 @@ export async function signUpWithEmail(payload: SignUpPayload): Promise<void> {
 
 export async function signOutCurrentUser(): Promise<void> {
   await signOut(auth);
+}
+
+export async function updateCurrentUserDisplayName(displayName: string): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Nu exista utilizator autentificat.');
+  }
+
+  await updateProfile(currentUser, { displayName: displayName.trim() });
+}
+
+export async function updateCurrentUserPassword(newPassword: string): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Nu exista utilizator autentificat.');
+  }
+
+  await updatePassword(currentUser, newPassword);
+}
+
+export async function updateCurrentUserPasswordWithCurrent(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !currentUser.email) {
+    throw new Error('Nu exista utilizator autentificat.');
+  }
+
+  const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+  await reauthenticateWithCredential(currentUser, credential);
+  await updatePassword(currentUser, newPassword);
 }

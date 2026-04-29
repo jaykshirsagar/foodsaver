@@ -1,5 +1,5 @@
 import { User } from 'firebase/auth';
-import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AppRole, UserProfile } from '../types/auth';
 
@@ -69,4 +69,10 @@ export async function ensureUserProfile(user: User): Promise<void> {
   };
 
   await setDoc(userRef, profile);
+}
+
+export async function updateUserDisplayName(uid: string, displayName: string): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), {
+    displayName: displayName.trim(),
+  });
 }
