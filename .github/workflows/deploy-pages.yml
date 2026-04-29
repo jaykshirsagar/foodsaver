@@ -50,6 +50,25 @@ jobs:
       - name: Build web export
         run: npx expo export --platform web --output-dir dist
 
+      - name: Patch asset paths for GitHub Pages
+        shell: bash
+        run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          OWNER="${{ github.repository_owner }}"
+
+          if [[ "$REPO_NAME" == "$OWNER.github.io" ]]; then
+            BASE_PATH=""
+          else
+            BASE_PATH="/$REPO_NAME"
+          fi
+
+          find dist -name "*.html" -type f -print0 | while IFS= read -r -d '' file; do
+            sed -i "s|\"/_expo/|\"${BASE_PATH}/_expo/|g" "$file"
+            sed -i "s|'/_expo/|'${BASE_PATH}/_expo/|g" "$file"
+          done
+
+          cp dist/index.html dist/404.html
+
       - name: Verify web artifact
         run: test -f dist/index.html
 
