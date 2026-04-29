@@ -137,6 +137,35 @@ npm run web
 - `npm run ios`: open iOS target
 - `npm run web`: run web target
 
+## GitHub Pages Deployment (GitHub Actions)
+
+This repository includes a workflow at [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml).
+
+It will:
+- run on push to `main` or `master`
+- install dependencies
+- build Expo web export to `dist`
+- deploy to GitHub Pages
+
+### Required GitHub settings
+
+1. Go to repository `Settings` -> `Pages`.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+
+### Required repository secrets
+
+Go to `Settings` -> `Secrets and variables` -> `Actions` and add:
+
+- `EXPO_PUBLIC_FIREBASE_API_KEY`
+- `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `EXPO_PUBLIC_FIREBASE_PROJECT_ID`
+- `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `EXPO_PUBLIC_FIREBASE_APP_ID`
+- `EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID`
+
+After secrets are added, push to `main`/`master` and deployment starts automatically.
+
 ## Troubleshooting
 
 ### .env was committed by mistake
