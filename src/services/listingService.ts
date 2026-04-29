@@ -52,7 +52,9 @@ export function subscribeListings(
     listingsQuery,
     (snapshot) => {
       const listings = snapshot.docs.map((item) => {
-        const data = item.data() as Partial<Listing> & {
+        const data = item.data() as Omit<Partial<Listing>, 'mode'> & {
+          mode?: Listing['mode'] | 'Discount';
+          priceEur?: number;
           createdAt?: { toMillis?: () => number };
         };
 
