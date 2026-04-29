@@ -166,6 +166,62 @@ Go to `Settings` -> `Secrets and variables` -> `Actions` and add:
 
 After secrets are added, push to `main`/`master` and deployment starts automatically.
 
+## Container Deployment (Recommended)
+
+This repo now includes container files:
+- [Dockerfile](Dockerfile)
+- [nginx.conf](nginx.conf)
+- [.dockerignore](.dockerignore)
+- [.github/workflows/deploy-container.yml](.github/workflows/deploy-container.yml)
+
+### Run locally with Docker
+
+```bash
+docker build \
+  --build-arg EXPO_PUBLIC_FIREBASE_API_KEY=... \
+  --build-arg EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=... \
+  --build-arg EXPO_PUBLIC_FIREBASE_PROJECT_ID=... \
+  --build-arg EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=... \
+  --build-arg EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=... \
+  --build-arg EXPO_PUBLIC_FIREBASE_APP_ID=... \
+  --build-arg EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=... \
+  -t foodsaver:web .
+
+docker run --rm -p 8080:80 foodsaver:web
+```
+
+Open `http://localhost:8080`.
+
+### Automatic image publish with GitHub Actions
+
+Workflow: [.github/workflows/deploy-container.yml](.github/workflows/deploy-container.yml)
+
+On push to `main`/`master`, it builds and pushes image to GHCR:
+- `ghcr.io/<owner>/<repo>:<branch>`
+- `ghcr.io/<owner>/<repo>:<sha>`
+- `ghcr.io/<owner>/<repo>:latest` (default branch only)
+
+### Required GitHub secrets for container build
+
+- `EXPO_PUBLIC_FIREBASE_API_KEY`
+- `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `EXPO_PUBLIC_FIREBASE_PROJECT_ID`
+- `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `EXPO_PUBLIC_FIREBASE_APP_ID`
+- `EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID`
+
+### Deploy the published container
+
+After image is in GHCR, deploy it to any container host:
+- Render
+- Railway
+- Fly.io
+- Azure Container Apps
+- DigitalOcean Apps
+
+Use port `80` inside the container.
+
 ## Troubleshooting
 
 ### .env was committed by mistake
