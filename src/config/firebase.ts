@@ -3,10 +3,6 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-function readEnv(name: string): string {
-  return process.env[name] ?? '';
-}
-
 function buildStorageBucketCandidates(rawBucket: string): string[] {
   const candidates: string[] = [];
 
@@ -27,17 +23,17 @@ function buildStorageBucketCandidates(rawBucket: string): string[] {
   return Array.from(new Set(candidates));
 }
 
-const storageBucket = readEnv('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET');
+const storageBucket = process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? '';
 const storageBucketCandidates = buildStorageBucketCandidates(storageBucket);
 
 const firebaseConfig = {
-  apiKey: readEnv('EXPO_PUBLIC_FIREBASE_API_KEY'),
-  authDomain: readEnv('EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN'),
-  projectId: readEnv('EXPO_PUBLIC_FIREBASE_PROJECT_ID'),
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? '',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? '',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? '',
   storageBucket,
-  messagingSenderId: readEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
-  appId: readEnv('EXPO_PUBLIC_FIREBASE_APP_ID'),
-  measurementId: readEnv('EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID'),
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '',
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID ?? '',
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
