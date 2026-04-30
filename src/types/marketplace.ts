@@ -17,6 +17,7 @@ export type Listing = {
   lng: number;
   imageUrls: string[];
   createdAt?: number;
+  expiresAt?: number;
 };
 
 export type CreateListingPayload = {
@@ -25,6 +26,7 @@ export type CreateListingPayload = {
   category: ListingInterest;
   quantity: string;
   expiresInHours: number;
+  expiresAtMs: number;
   mode: ListingMode;
   priceRon: number;
   imageDataUris: string[];
@@ -35,6 +37,7 @@ export type UpdateListingPayload = {
   description: string;
   quantity: string;
   expiresInHours: number;
+  expiresAtMs: number;
   priceRon: number;
 };
 

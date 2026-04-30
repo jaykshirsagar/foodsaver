@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
   Alert,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -43,9 +45,107 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
-  const [editExpires, setEditExpires] = useState('12');
+  const [editExpiresAt, setEditExpiresAt] = useState(() => new Date(Date.now() + 12 * 60 * 60 * 1000));
+  const [showEditDateTimePicker, setShowEditDateTimePicker] = useState(false);
+  const [editPickerMode, setEditPickerMode] = useState<'date' | 'time'>('date');
   const [editPrice, setEditPrice] = useState('0');
   const [isSaving, setIsSaving] = useState(false);
+  const [editWebDateInput, setEditWebDateInput] = useState('');
+  const [editWebTimeInput, setEditWebTimeInput] = useState('');
+
+  function formatDateTime(value: Date): string {
+    return value.toLocaleString('ro-RO', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  function toHoursUntilExpiration(value: Date): number {
+    return Math.max(1, Math.ceil((value.getTime() - Date.now()) / (60 * 60 * 1000)));
+  }
+
+  function syncEditWebInputs(value: Date) {
+    const day = String(value.getDate()).padStart(2, '0');
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const year = value.getFullYear();
+    const hour = String(value.getHours()).padStart(2, '0');
+    const minute = String(value.getMinutes()).padStart(2, '0');
+    setEditWebDateInput(`${day}.${month}.${year}`);
+    setEditWebTimeInput(`${hour}:${minute}`);
+  }
+
+  function tryApplyEditWebDateTime(nextDateText: string, nextTimeText: string) {
+    const dateMatch = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(nextDateText.trim());
+    const timeMatch = /^(\d{2}):(\d{2})$/.exec(nextTimeText.trim());
+    if (!dateMatch || !timeMatch) {
+      return;
+    }
+
+    const day = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]);
+    const year = Number(dateMatch[3]);
+    const hours = Number(timeMatch[1]);
+    const minutes = Number(timeMatch[2]);
+
+    if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59) {
+      return;
+    }
+
+    const candidate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    if (
+      !Number.isNaN(candidate.getTime())
+      && candidate.getFullYear() === year
+      && candidate.getMonth() === month - 1
+      && candidate.getDate() === day
+    ) {
+      setEditExpiresAt(candidate);
+    }
+  }
+
+  function handleEditWebDateChange(value: string) {
+    setEditWebDateInput(value);
+    tryApplyEditWebDateTime(value, editWebTimeInput);
+  }
+
+  function handleEditWebTimeChange(value: string) {
+    setEditWebTimeInput(value);
+    tryApplyEditWebDateTime(editWebDateInput, value);
+  }
+
+  function handleEditDateTimeChange(event: DateTimePickerEvent, selectedDate?: Date) {
+    if (event.type === 'dismissed') {
+      setShowEditDateTimePicker(false);
+      return;
+    }
+
+    if (!selectedDate) {
+      return;
+    }
+
+    if (editPickerMode === 'date') {
+      const nextDate = new Date(editExpiresAt);
+      nextDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+      setEditExpiresAt(nextDate);
+      syncEditWebInputs(nextDate);
+      setEditPickerMode('time');
+      return;
+    }
+
+    const nextDate = new Date(editExpiresAt);
+    nextDate.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
+    setEditExpiresAt(nextDate);
+    syncEditWebInputs(nextDate);
+    setShowEditDateTimePicker(false);
+    setEditPickerMode('date');
+  }
+
+  function openEditDateTimePicker() {
+    setEditPickerMode('date');
+    setShowEditDateTimePicker(true);
+  }
 
   const ownListings = listings.filter(
     (entry) =>
@@ -132,7 +232,17 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
     setEditTitle(listing.title);
     setEditDescription(listing.description);
     setEditQuantity(listing.quantity);
-    setEditExpires(String(listing.expiresInHours));
+
+    const fallbackFromCreatedAt =
+      typeof listing.createdAt === 'number'
+        ? listing.createdAt + listing.expiresInHours * 60 * 60 * 1000
+        : Date.now() + listing.expiresInHours * 60 * 60 * 1000;
+    const nextExpiresAt = typeof listing.expiresAt === 'number' ? listing.expiresAt : fallbackFromCreatedAt;
+    const nextDate = new Date(nextExpiresAt);
+    setEditExpiresAt(nextDate);
+    syncEditWebInputs(nextDate);
+    setShowEditDateTimePicker(false);
+    setEditPickerMode('date');
     setEditPrice(String(listing.priceRon));
   }
 
@@ -141,6 +251,7 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
       return;
     }
 
+    setShowEditDateTimePicker(false);
     setEditingListingId(null);
   }
 
@@ -149,10 +260,15 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
       return;
     }
 
-    const expiresInHours = Number(editExpires);
+    const expiresInHours = toHoursUntilExpiration(editExpiresAt);
     const priceRon = Number(editPrice.replace(',', '.'));
-    if (!editTitle.trim() || !editQuantity.trim() || Number.isNaN(expiresInHours)) {
-      Alert.alert('Date invalide', 'Completeaza titlul, cantitatea si un numar valid de ore.');
+    if (!editTitle.trim() || !editQuantity.trim()) {
+      Alert.alert('Date invalide', 'Completeaza titlul si cantitatea.');
+      return;
+    }
+
+    if (editExpiresAt.getTime() <= Date.now()) {
+      Alert.alert('Data invalida', 'Alege o data si ora din viitor pentru expirare.');
       return;
     }
 
@@ -162,7 +278,8 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
         title: editTitle.trim(),
         description: editDescription.trim(),
         quantity: editQuantity.trim(),
-        expiresInHours: Math.max(1, expiresInHours),
+        expiresInHours,
+        expiresAtMs: editExpiresAt.getTime(),
         priceRon: Number.isNaN(priceRon) ? 0 : Math.max(0, priceRon),
       });
       setEditingListingId(null);
@@ -221,7 +338,7 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
                 </Text>
                 <Text style={styles.listingMeta}>{entry.quantity} | expira in {entry.expiresInHours}h</Text>
                 <Text style={styles.listingPrice}>
-                  {entry.mode === 'Donate' ? 'Donatie gratuita' : `Vanzare: ${entry.priceRon.toFixed(2)} RON`}
+                  {entry.mode === 'Donate' ? 'Donati' : `Vanzare: ${entry.priceRon.toFixed(2)} RON`}
                 </Text>
                 <View style={styles.rowActions}>
                   <Pressable style={styles.secondaryButton} onPress={() => openEditModal(entry)}>
@@ -265,24 +382,60 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
               value={editQuantity}
               onChangeText={setEditQuantity}
             />
-            <View style={styles.modalRow}>
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Ore"
-                placeholderTextColor="#8fa2b8"
-                value={editExpires}
-                onChangeText={setEditExpires}
-                keyboardType="numeric"
+            {Platform.OS === 'web' ? (
+              <View style={styles.webDateGroup}>
+                <Text style={styles.dateInputLabel}>Expira la</Text>
+                <View style={styles.webDateRow}>
+                  <TextInput
+                    style={[styles.input, styles.webDateInput]}
+                    placeholder="DD.MM.YYYY"
+                    placeholderTextColor="#8fa2b8"
+                    value={editWebDateInput}
+                    onChangeText={handleEditWebDateChange}
+                  />
+                  <TextInput
+                    style={[styles.input, styles.webTimeInput]}
+                    placeholder="HH:mm"
+                    placeholderTextColor="#8fa2b8"
+                    value={editWebTimeInput}
+                    onChangeText={handleEditWebTimeChange}
+                  />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Pret RON"
+                  placeholderTextColor="#8fa2b8"
+                  value={editPrice}
+                  onChangeText={setEditPrice}
+                  keyboardType="numeric"
+                />
+              </View>
+            ) : (
+              <View style={styles.modalRow}>
+                <Pressable style={[styles.input, styles.halfInput, styles.dateInputButton]} onPress={openEditDateTimePicker}>
+                  <Text style={styles.dateInputLabel}>Expira la</Text>
+                  <Text style={styles.dateInputValue}>{formatDateTime(editExpiresAt)}</Text>
+                </Pressable>
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  placeholder="Pret RON"
+                  placeholderTextColor="#8fa2b8"
+                  value={editPrice}
+                  onChangeText={setEditPrice}
+                  keyboardType="numeric"
+                />
+              </View>
+            )}
+
+            {Platform.OS !== 'web' && showEditDateTimePicker ? (
+              <DateTimePicker
+                value={editExpiresAt}
+                mode={editPickerMode}
+                minimumDate={new Date()}
+                is24Hour
+                onChange={handleEditDateTimeChange}
               />
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Pret RON"
-                placeholderTextColor="#8fa2b8"
-                value={editPrice}
-                onChangeText={setEditPrice}
-                keyboardType="numeric"
-              />
-            </View>
+            ) : null}
 
             <View style={styles.modalActions}>
               <Pressable style={styles.modalCancel} onPress={closeEditModal}>
@@ -544,6 +697,35 @@ const styles = StyleSheet.create({
   inputDescription: {
     borderRadius: 20,
     minHeight: 84,
+  },
+  dateInputButton: {
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  dateInputLabel: {
+    color: '#8ca3bb',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  dateInputValue: {
+    color: '#e5f0ff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  webDateGroup: {
+    gap: 6,
+  },
+  webDateRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  webDateInput: {
+    flex: 1.2,
+    borderRadius: 14,
+  },
+  webTimeInput: {
+    flex: 0.8,
+    borderRadius: 14,
   },
   modalRow: {
     flexDirection: 'row',

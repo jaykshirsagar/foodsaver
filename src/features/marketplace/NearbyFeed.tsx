@@ -77,7 +77,7 @@ export function NearbyFeed({ listings, canDelete = false, onDelete, onSelectList
                 {entry.description || 'Fara descriere disponibila.'}
               </Text>
               <Text style={styles.feedPrice}>
-                {entry.mode === 'Donate' ? 'Donatie gratuita' : `Vanzare: ${entry.priceRon.toFixed(2)} RON`}
+                {entry.mode === 'Donate' ? 'Donatie' : `Vanzare: ${entry.priceRon.toFixed(2)} RON`}
               </Text>
               <Text style={styles.feedTapHint}>Apasa pentru detalii</Text>
             </Pressable>

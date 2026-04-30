@@ -3,7 +3,7 @@ import { Alert, Image, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, T
 import { NearbyFeed } from '../features/marketplace/NearbyFeed';
 import { NotificationsPanel } from '../features/marketplace/NotificationsPanel';
 import { useAuth } from '../context/AuthContext';
-import { buyListing, subscribePurchasedListingIds } from '../services/listingService';
+import { buyListing, formatListingError, subscribePurchasedListingIds } from '../services/listingService';
 import { rankListings } from '../services/matchingService';
 import { Listing, RankedListing } from '../types/marketplace';
 
@@ -28,6 +28,7 @@ export function MarketplaceScreen({ listings, onDeleteListing }: MarketplaceScre
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [purchasedListingIds, setPurchasedListingIds] = useState<string[]>([]);
   const [isBuying, setIsBuying] = useState(false);
+  const [buyError, setBuyError] = useState<string>('');
 
   const ranked = useMemo(() => {
     if (!profile) {
@@ -76,18 +77,26 @@ export function MarketplaceScreen({ listings, onDeleteListing }: MarketplaceScre
     }
   }, [selectedListingId, selectedListing]);
 
+  useEffect(() => {
+    if (selectedListingId) {
+      setBuyError('');
+    }
+  }, [selectedListingId]);
+
   async function handleBuy() {
     if (!selectedListingId || !selectedListing || !user || isBuying) {
       return;
     }
 
+    setBuyError('');
     setIsBuying(true);
     try {
       await buyListing(user.uid, selectedListing);
       setSelectedListingId(null);
       Alert.alert('Comanda trimisa', 'Produsul a fost rezervat si eliminat din lista curenta.');
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Nu am putut finaliza comanda.';
+      const message = formatListingError(error);
+      setBuyError(message);
       Alert.alert('Eroare', message);
     } finally {
       setIsBuying(false);
@@ -174,7 +183,7 @@ export function MarketplaceScreen({ listings, onDeleteListing }: MarketplaceScre
 
               <Text style={styles.modalPrice}>
                 {selectedListing?.mode === 'Donate'
-                  ? 'Donatie gratuita'
+                  ? 'Donatie'
                   : `Vanzare: ${selectedListing?.priceRon.toFixed(2) ?? '0.00'} RON`}
               </Text>
 
@@ -186,6 +195,7 @@ export function MarketplaceScreen({ listings, onDeleteListing }: MarketplaceScre
                   <Text style={styles.buyButtonText}>{isBuying ? 'Se proceseaza...' : 'Buy'}</Text>
                 </Pressable>
               </View>
+              {!!buyError && <Text style={styles.buyErrorText}>{buyError}</Text>}
             </ScrollView>
           </View>
         </View>
@@ -362,5 +372,11 @@ const styles = StyleSheet.create({
   buyButtonText: {
     color: '#2f2200',
     fontWeight: '800',
+  },
+  buyErrorText: {
+    marginTop: 10,
+    color: '#ff9b9b',
+    lineHeight: 18,
+    fontWeight: '600',
   },
 });
