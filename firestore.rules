@@ -9,12 +9,20 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
+    function buyerCheckoutDelete(listingId) {
+      return signedIn() && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/purchases/$(listingId));
+    }
+
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role in ['vanzator', 'utilizator'];
       allow read, update, delete: if signedIn() && request.auth.uid == uid;
 
       match /purchases/{listingId} {
-        allow read, create, update, delete: if signedIn() && request.auth.uid == uid;
+        allow read, update, delete: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.listingId == listingId
+          && request.resource.data.buyerUid == request.auth.uid;
       }
     }
 
@@ -22,7 +30,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && userRole() in ['vanzator', 'admin', 'donor'] && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if signedIn() && (
-        userRole() == 'admin' || resource.data.ownerUid == request.auth.uid
+        userRole() == 'admin' || resource.data.ownerUid == request.auth.uid || buyerCheckoutDelete(listingId)
       );
     }
   }

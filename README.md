@@ -92,6 +92,9 @@ npm run web
 3. Enable Cloud Firestore.
 4. Add your web app config values into `.env`.
 5. Publish Firestore rules from [firestore.rules](firestore.rules).
+6. Enable Firestore TTL for automatic expiry cleanup:
+  - Collection group: `listings`
+  - TTL field: `expiresAt`
 
 ## Firestore Data Model
 
@@ -117,6 +120,7 @@ npm run web
   - category
   - quantity
   - expiresInHours
+  - expiresAt
   - mode
   - priceRon
   - lat, lng
