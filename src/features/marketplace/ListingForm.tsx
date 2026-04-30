@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { createElement, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { ListingInterest } from '../../types/auth';
 import { CreateListingPayload } from '../../types/marketplace';
 
@@ -19,6 +19,8 @@ type ListingFormProps = {
 };
 
 export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
+  const { width } = useWindowDimensions();
+  const compactWidth = width < 420;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -31,17 +33,8 @@ export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  const [webDateInput, setWebDateInput] = useState(() => {
-    const day = String(expiresAt.getDate()).padStart(2, '0');
-    const month = String(expiresAt.getMonth() + 1).padStart(2, '0');
-    const year = expiresAt.getFullYear();
-    return `${day}.${month}.${year}`;
-  });
-  const [webTimeInput, setWebTimeInput] = useState(() => {
-    const hour = String(expiresAt.getHours()).padStart(2, '0');
-    const minute = String(expiresAt.getMinutes()).padStart(2, '0');
-    return `${hour}:${minute}`;
-  });
+  const [webDateInput, setWebDateInput] = useState(() => formatDateForWeb(expiresAt));
+  const [webTimeInput, setWebTimeInput] = useState(() => formatTimeForWeb(expiresAt));
 
   function formatDateTime(value: Date): string {
     return value.toLocaleString('ro-RO', {
@@ -57,52 +50,64 @@ export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
     return Math.max(1, Math.ceil((value.getTime() - Date.now()) / (60 * 60 * 1000)));
   }
 
-  function syncWebInputs(value: Date) {
-    const day = String(value.getDate()).padStart(2, '0');
-    const month = String(value.getMonth() + 1).padStart(2, '0');
+  function formatDateForWeb(value: Date): string {
     const year = value.getFullYear();
-    const hour = String(value.getHours()).padStart(2, '0');
-    const minute = String(value.getMinutes()).padStart(2, '0');
-    setWebDateInput(`${day}.${month}.${year}`);
-    setWebTimeInput(`${hour}:${minute}`);
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
-  function tryApplyWebDateTime(nextDateText: string, nextTimeText: string) {
-    const dateMatch = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(nextDateText.trim());
-    const timeMatch = /^(\d{2}):(\d{2})$/.exec(nextTimeText.trim());
+  function formatTimeForWeb(value: Date): string {
+    const hour = String(value.getHours()).padStart(2, '0');
+    const minute = String(value.getMinutes()).padStart(2, '0');
+    return `${hour}:${minute}`;
+  }
+
+  function syncWebDateTimeInputs(value: Date) {
+    setWebDateInput(formatDateForWeb(value));
+    setWebTimeInput(formatTimeForWeb(value));
+  }
+
+  function parseWebDateTime(dateText: string, timeText: string): Date | null {
+    const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateText.trim());
+    const timeMatch = /^(\d{2}):(\d{2})$/.exec(timeText.trim());
     if (!dateMatch || !timeMatch) {
-      return;
+      return null;
     }
 
-    const day = Number(dateMatch[1]);
+    const year = Number(dateMatch[1]);
     const month = Number(dateMatch[2]);
-    const year = Number(dateMatch[3]);
+    const day = Number(dateMatch[3]);
     const hours = Number(timeMatch[1]);
     const minutes = Number(timeMatch[2]);
-
-    if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59) {
-      return;
-    }
-
     const candidate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
     if (
-      !Number.isNaN(candidate.getTime())
-      && candidate.getFullYear() === year
-      && candidate.getMonth() === month - 1
-      && candidate.getDate() === day
+      Number.isNaN(candidate.getTime())
+      || candidate.getFullYear() !== year
+      || candidate.getMonth() !== month - 1
+      || candidate.getDate() !== day
     ) {
-      setExpiresAt(candidate);
+      return null;
     }
+
+    return candidate;
   }
 
   function handleWebDateChange(value: string) {
     setWebDateInput(value);
-    tryApplyWebDateTime(value, webTimeInput);
+    const parsed = parseWebDateTime(value, webTimeInput);
+    if (parsed) {
+      setExpiresAt(parsed);
+    }
   }
 
   function handleWebTimeChange(value: string) {
     setWebTimeInput(value);
-    tryApplyWebDateTime(webDateInput, value);
+    const parsed = parseWebDateTime(webDateInput, value);
+    if (parsed) {
+      setExpiresAt(parsed);
+    }
   }
 
   function handleDateTimeChange(event: DateTimePickerEvent, selectedDate?: Date) {
@@ -119,7 +124,7 @@ export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
       const nextDate = new Date(expiresAt);
       nextDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
       setExpiresAt(nextDate);
-      syncWebInputs(nextDate);
+      syncWebDateTimeInputs(nextDate);
       setPickerMode('time');
       return;
     }
@@ -127,7 +132,7 @@ export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
     const nextDate = new Date(expiresAt);
     nextDate.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
     setExpiresAt(nextDate);
-    syncWebInputs(nextDate);
+    syncWebDateTimeInputs(nextDate);
     setShowDateTimePicker(false);
     setPickerMode('date');
   }
@@ -205,7 +210,7 @@ export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
       setQuantity('');
       const resetDate = new Date(Date.now() + 12 * 60 * 60 * 1000);
       setExpiresAt(resetDate);
-      syncWebInputs(resetDate);
+      syncWebDateTimeInputs(resetDate);
       setPrice('');
       setCategory('Produce');
       setImageDataUris([]);
@@ -247,21 +252,43 @@ export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
       {Platform.OS === 'web' ? (
         <View style={styles.webDateGroup}>
           <Text style={styles.dateInputLabel}>Expira la</Text>
-          <View style={styles.webDateRow}>
-            <TextInput
-              placeholder="DD.MM.YYYY"
-              placeholderTextColor="#7a8a93"
-              style={[styles.input, styles.webDateInput]}
-              value={webDateInput}
-              onChangeText={handleWebDateChange}
-            />
-            <TextInput
-              placeholder="HH:mm"
-              placeholderTextColor="#7a8a93"
-              style={[styles.input, styles.webTimeInput]}
-              value={webTimeInput}
-              onChangeText={handleWebTimeChange}
-            />
+          <Text style={styles.datePreviewText}>Selectat: {formatDateTime(expiresAt)}</Text>
+          <View style={[styles.webDateNativeRow, compactWidth && styles.webDateNativeRowCompact]}>
+            {createElement('input' as never, {
+              type: 'date',
+              value: webDateInput,
+              min: formatDateForWeb(new Date()),
+              onChange: (event: { target: { value: string } }) => handleWebDateChange(event.target.value),
+              style: {
+                width: '100%',
+                boxSizing: 'border-box',
+                borderRadius: 14,
+                border: '1px solid #253447',
+                background: '#0f141c',
+                color: '#e5f0ff',
+                padding: '11px 14px',
+                fontSize: 14,
+                outline: 'none',
+                minHeight: 44,
+              },
+            })}
+            {createElement('input' as never, {
+              type: 'time',
+              value: webTimeInput,
+              onChange: (event: { target: { value: string } }) => handleWebTimeChange(event.target.value),
+              style: {
+                width: '100%',
+                boxSizing: 'border-box',
+                borderRadius: 14,
+                border: '1px solid #253447',
+                background: '#0f141c',
+                color: '#e5f0ff',
+                padding: '11px 14px',
+                fontSize: 14,
+                outline: 'none',
+                minHeight: 44,
+              },
+            })}
           </View>
           <TextInput
             placeholder="Pret RON (0 = donatie)"
@@ -399,20 +426,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  datePreviewText: {
+    color: '#b7cbe0',
+    fontSize: 12,
+    marginBottom: 2,
+  },
   webDateGroup: {
     gap: 6,
   },
-  webDateRow: {
+  webDateNativeRow: {
+    width: '100%',
+    display: 'flex',
     flexDirection: 'row',
     gap: 8,
   },
-  webDateInput: {
-    flex: 1.2,
-    borderRadius: 14,
-  },
-  webTimeInput: {
-    flex: 0.8,
-    borderRadius: 14,
+  webDateNativeRowCompact: {
+    flexDirection: 'column',
   },
   fieldLabel: {
     color: '#a7b8c8',

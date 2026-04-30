@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { createElement, useState } from 'react';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
   Alert,
@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -29,6 +30,8 @@ type AccountScreenProps = {
 };
 
 export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing }: AccountScreenProps) {
+  const { width } = useWindowDimensions();
+  const compactWidth = width < 420;
   const { profile, user, signOutUser } = useAuth();
   const [showNameModal, setShowNameModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -67,52 +70,64 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
     return Math.max(1, Math.ceil((value.getTime() - Date.now()) / (60 * 60 * 1000)));
   }
 
-  function syncEditWebInputs(value: Date) {
-    const day = String(value.getDate()).padStart(2, '0');
-    const month = String(value.getMonth() + 1).padStart(2, '0');
+  function formatDateForWeb(value: Date): string {
     const year = value.getFullYear();
-    const hour = String(value.getHours()).padStart(2, '0');
-    const minute = String(value.getMinutes()).padStart(2, '0');
-    setEditWebDateInput(`${day}.${month}.${year}`);
-    setEditWebTimeInput(`${hour}:${minute}`);
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
-  function tryApplyEditWebDateTime(nextDateText: string, nextTimeText: string) {
-    const dateMatch = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(nextDateText.trim());
-    const timeMatch = /^(\d{2}):(\d{2})$/.exec(nextTimeText.trim());
+  function formatTimeForWeb(value: Date): string {
+    const hour = String(value.getHours()).padStart(2, '0');
+    const minute = String(value.getMinutes()).padStart(2, '0');
+    return `${hour}:${minute}`;
+  }
+
+  function syncEditWebDateTimeInputs(value: Date) {
+    setEditWebDateInput(formatDateForWeb(value));
+    setEditWebTimeInput(formatTimeForWeb(value));
+  }
+
+  function parseWebDateTime(dateText: string, timeText: string): Date | null {
+    const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateText.trim());
+    const timeMatch = /^(\d{2}):(\d{2})$/.exec(timeText.trim());
     if (!dateMatch || !timeMatch) {
-      return;
+      return null;
     }
 
-    const day = Number(dateMatch[1]);
+    const year = Number(dateMatch[1]);
     const month = Number(dateMatch[2]);
-    const year = Number(dateMatch[3]);
+    const day = Number(dateMatch[3]);
     const hours = Number(timeMatch[1]);
     const minutes = Number(timeMatch[2]);
-
-    if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59) {
-      return;
-    }
-
     const candidate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
     if (
-      !Number.isNaN(candidate.getTime())
-      && candidate.getFullYear() === year
-      && candidate.getMonth() === month - 1
-      && candidate.getDate() === day
+      Number.isNaN(candidate.getTime())
+      || candidate.getFullYear() !== year
+      || candidate.getMonth() !== month - 1
+      || candidate.getDate() !== day
     ) {
-      setEditExpiresAt(candidate);
+      return null;
     }
+
+    return candidate;
   }
 
   function handleEditWebDateChange(value: string) {
     setEditWebDateInput(value);
-    tryApplyEditWebDateTime(value, editWebTimeInput);
+    const parsed = parseWebDateTime(value, editWebTimeInput);
+    if (parsed) {
+      setEditExpiresAt(parsed);
+    }
   }
 
   function handleEditWebTimeChange(value: string) {
     setEditWebTimeInput(value);
-    tryApplyEditWebDateTime(editWebDateInput, value);
+    const parsed = parseWebDateTime(editWebDateInput, value);
+    if (parsed) {
+      setEditExpiresAt(parsed);
+    }
   }
 
   function handleEditDateTimeChange(event: DateTimePickerEvent, selectedDate?: Date) {
@@ -129,7 +144,7 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
       const nextDate = new Date(editExpiresAt);
       nextDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
       setEditExpiresAt(nextDate);
-      syncEditWebInputs(nextDate);
+      syncEditWebDateTimeInputs(nextDate);
       setEditPickerMode('time');
       return;
     }
@@ -137,7 +152,7 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
     const nextDate = new Date(editExpiresAt);
     nextDate.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
     setEditExpiresAt(nextDate);
-    syncEditWebInputs(nextDate);
+    syncEditWebDateTimeInputs(nextDate);
     setShowEditDateTimePicker(false);
     setEditPickerMode('date');
   }
@@ -240,7 +255,7 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
     const nextExpiresAt = typeof listing.expiresAt === 'number' ? listing.expiresAt : fallbackFromCreatedAt;
     const nextDate = new Date(nextExpiresAt);
     setEditExpiresAt(nextDate);
-    syncEditWebInputs(nextDate);
+    syncEditWebDateTimeInputs(nextDate);
     setShowEditDateTimePicker(false);
     setEditPickerMode('date');
     setEditPrice(String(listing.priceRon));
@@ -385,21 +400,43 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
             {Platform.OS === 'web' ? (
               <View style={styles.webDateGroup}>
                 <Text style={styles.dateInputLabel}>Expira la</Text>
-                <View style={styles.webDateRow}>
-                  <TextInput
-                    style={[styles.input, styles.webDateInput]}
-                    placeholder="DD.MM.YYYY"
-                    placeholderTextColor="#8fa2b8"
-                    value={editWebDateInput}
-                    onChangeText={handleEditWebDateChange}
-                  />
-                  <TextInput
-                    style={[styles.input, styles.webTimeInput]}
-                    placeholder="HH:mm"
-                    placeholderTextColor="#8fa2b8"
-                    value={editWebTimeInput}
-                    onChangeText={handleEditWebTimeChange}
-                  />
+                <Text style={styles.datePreviewText}>Selectat: {formatDateTime(editExpiresAt)}</Text>
+                <View style={[styles.webDateNativeRow, compactWidth && styles.webDateNativeRowCompact]}>
+                  {createElement('input' as never, {
+                    type: 'date',
+                    value: editWebDateInput,
+                    min: formatDateForWeb(new Date()),
+                    onChange: (event: { target: { value: string } }) => handleEditWebDateChange(event.target.value),
+                    style: {
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      borderRadius: 14,
+                      border: '1px solid #253447',
+                      background: '#0f141c',
+                      color: '#e5f0ff',
+                      padding: '11px 14px',
+                      fontSize: 14,
+                      outline: 'none',
+                      minHeight: 44,
+                    },
+                  })}
+                  {createElement('input' as never, {
+                    type: 'time',
+                    value: editWebTimeInput,
+                    onChange: (event: { target: { value: string } }) => handleEditWebTimeChange(event.target.value),
+                    style: {
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      borderRadius: 14,
+                      border: '1px solid #253447',
+                      background: '#0f141c',
+                      color: '#e5f0ff',
+                      padding: '11px 14px',
+                      fontSize: 14,
+                      outline: 'none',
+                      minHeight: 44,
+                    },
+                  })}
                 </View>
                 <TextInput
                   style={styles.input}
@@ -712,20 +749,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  datePreviewText: {
+    color: '#b7cbe0',
+    fontSize: 12,
+    marginBottom: 2,
+  },
   webDateGroup: {
     gap: 6,
   },
-  webDateRow: {
+  webDateNativeRow: {
+    width: '100%',
+    display: 'flex',
     flexDirection: 'row',
     gap: 8,
   },
-  webDateInput: {
-    flex: 1.2,
-    borderRadius: 14,
-  },
-  webTimeInput: {
-    flex: 0.8,
-    borderRadius: 14,
+  webDateNativeRowCompact: {
+    flexDirection: 'column',
   },
   modalRow: {
     flexDirection: 'row',
