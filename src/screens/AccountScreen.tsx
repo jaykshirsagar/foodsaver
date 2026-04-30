@@ -307,13 +307,33 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
   }
 
   function confirmDelete(listingId: string) {
+    async function executeDelete() {
+      try {
+        await onDeleteOwnListing(listingId);
+        Alert.alert('Succes', 'Anuntul a fost sters.');
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Nu am putut sterge anuntul.';
+        Alert.alert('Eroare', message);
+      }
+    }
+
+    if (Platform.OS === 'web') {
+      const accepted = typeof globalThis.confirm === 'function'
+        ? globalThis.confirm('Esti sigur ca vrei sa stergi acest anunt?')
+        : true;
+      if (accepted) {
+        void executeDelete();
+      }
+      return;
+    }
+
     Alert.alert('Confirmare', 'Esti sigur ca vrei sa stergi acest anunt?', [
       { text: 'Anuleaza', style: 'cancel' },
       {
         text: 'Sterge',
         style: 'destructive',
         onPress: () => {
-          void onDeleteOwnListing(listingId);
+          void executeDelete();
         },
       },
     ]);

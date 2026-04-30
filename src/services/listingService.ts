@@ -5,6 +5,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  increment,
   onSnapshot,
   orderBy,
   query,
@@ -250,6 +251,7 @@ export async function buyListing(userUid: string, listing: Listing): Promise<voi
   await runTransaction(db, async (transaction) => {
     const listingRef = doc(db, 'listings', listing.id);
     const purchaseRef = doc(db, 'users', userUid, 'purchases', listing.id);
+    const userRef = doc(db, 'users', userUid);
     const listingSnapshot = await transaction.get(listingRef);
 
     if (!listingSnapshot.exists()) {
@@ -277,11 +279,20 @@ export async function buyListing(userUid: string, listing: Listing): Promise<voi
       title: listing.title,
       ownerUid: listing.ownerUid,
       owner: listing.owner,
+      category: listing.category,
       priceRon: listing.priceRon,
       mode: listing.mode,
       buyerUid: userUid,
       purchasedAt: serverTimestamp(),
     });
+
+    transaction.set(
+      userRef,
+      {
+        [`interestScores.${listing.category}`]: increment(1),
+      },
+      { merge: true },
+    );
 
     transaction.delete(listingRef);
   });

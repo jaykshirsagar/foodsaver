@@ -1,4 +1,4 @@
-import { Alert, Image, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { RankedListing } from '../../types/marketplace';
@@ -26,6 +26,27 @@ export function NearbyFeed({ listings, canDelete = false, onDelete, onSelectList
     if (!onDelete) {
       return;
     }
+    const deleteHandler = onDelete;
+
+    async function executeDelete() {
+      try {
+        await deleteHandler(listingId);
+        Alert.alert('Succes', 'Anuntul a fost sters.');
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Nu am putut sterge anuntul.';
+        Alert.alert('Eroare', message);
+      }
+    }
+
+    if (Platform.OS === 'web') {
+      const accepted = typeof globalThis.confirm === 'function'
+        ? globalThis.confirm('Esti sigur ca vrei sa stergi acest anunt?')
+        : true;
+      if (accepted) {
+        void executeDelete();
+      }
+      return;
+    }
 
     Alert.alert('Confirmare', 'Esti sigur ca vrei sa stergi acest anunt?', [
       { text: 'Anuleaza', style: 'cancel' },
@@ -33,7 +54,7 @@ export function NearbyFeed({ listings, canDelete = false, onDelete, onSelectList
         text: 'Sterge',
         style: 'destructive',
         onPress: () => {
-          void onDelete(listingId);
+          void executeDelete();
         },
       },
     ]);

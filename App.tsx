@@ -136,7 +136,12 @@ function AppContent() {
 
   async function handleDeleteListing(listingId: string): Promise<void> {
     if (!isAdmin) {
-      return;
+      throw new Error('Doar adminul poate sterge anunturi din Piata.');
+    }
+
+    const listing = listings.find((item) => item.id === listingId);
+    if (!listing) {
+      throw new Error('Anuntul nu mai exista.');
     }
 
     await deleteListing(listingId);
@@ -144,12 +149,16 @@ function AppContent() {
 
   async function handleDeleteOwnListing(listingId: string): Promise<void> {
     if (!user) {
-      return;
+      throw new Error('Trebuie sa fii autentificat pentru a sterge anuntul.');
     }
 
     const listing = listings.find((item) => item.id === listingId);
-    if (!listing || listing.ownerUid !== user.uid) {
-      return;
+    if (!listing) {
+      throw new Error('Anuntul nu mai exista.');
+    }
+
+    if (listing.ownerUid !== user.uid) {
+      throw new Error('Poti sterge doar propriile anunturi.');
     }
 
     await deleteListing(listingId);
