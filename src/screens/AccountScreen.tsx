@@ -53,6 +53,15 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
   const [editPickerMode, setEditPickerMode] = useState<'date' | 'time'>('date');
   const [editPrice, setEditPrice] = useState('0');
   const [isSaving, setIsSaving] = useState(false);
+    function showValidationPopup(title: string, message: string) {
+      if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
+        globalThis.alert(`${title}\n${message}`);
+        return;
+      }
+
+      Alert.alert(title, message);
+    }
+
   const [editWebDateInput, setEditWebDateInput] = useState('');
   const [editWebTimeInput, setEditWebTimeInput] = useState('');
 
@@ -276,26 +285,51 @@ export function AccountScreen({ listings, onDeleteOwnListing, onUpdateOwnListing
     }
 
     const expiresInHours = toHoursUntilExpiration(editExpiresAt);
-    const priceRon = Number(editPrice.replace(',', '.'));
-    if (!editTitle.trim() || !editQuantity.trim()) {
-      Alert.alert('Date invalide', 'Completeaza titlul si cantitatea.');
+    const cleanTitle = editTitle.trim();
+    const cleanDescription = editDescription.trim();
+    const cleanQuantity = editQuantity.trim();
+    const rawPrice = editPrice.trim();
+    const parsedPrice = Number(rawPrice.replace(',', '.'));
+
+    if (!cleanTitle) {
+      showValidationPopup('Camp obligatoriu', 'Completeaza titlul anuntului.');
+      return;
+    }
+
+    if (!cleanDescription) {
+      showValidationPopup('Camp obligatoriu', 'Completeaza descrierea anuntului.');
+      return;
+    }
+
+    if (!cleanQuantity) {
+      showValidationPopup('Camp obligatoriu', 'Completeaza cantitatea.');
+      return;
+    }
+
+    if (!rawPrice) {
+      showValidationPopup('Camp obligatoriu', 'Completeaza pretul in RON (0 pentru donatie).');
+      return;
+    }
+
+    if (Number.isNaN(parsedPrice)) {
+      showValidationPopup('Pret invalid', 'Introdu un numar valid pentru pret (ex: 12.5 sau 12,5).');
       return;
     }
 
     if (editExpiresAt.getTime() <= Date.now()) {
-      Alert.alert('Data invalida', 'Alege o data si ora din viitor pentru expirare.');
+      showValidationPopup('Data invalida', 'Alege o data si ora din viitor pentru expirare.');
       return;
     }
 
     setIsSaving(true);
     try {
       await onUpdateOwnListing(editingListingId, {
-        title: editTitle.trim(),
-        description: editDescription.trim(),
-        quantity: editQuantity.trim(),
+        title: cleanTitle,
+        description: cleanDescription,
+        quantity: cleanQuantity,
         expiresInHours,
         expiresAtMs: editExpiresAt.getTime(),
-        priceRon: Number.isNaN(priceRon) ? 0 : Math.max(0, priceRon),
+        priceRon: Math.max(0, parsedPrice),
       });
       setEditingListingId(null);
     } catch (error: unknown) {

@@ -1,7 +1,7 @@
 import { createElement, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Alert, Image, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { ListingInterest } from '../../types/auth';
 import { CreateListingPayload } from '../../types/marketplace';
 
@@ -32,6 +32,15 @@ export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
   const [imageDataUris, setImageDataUris] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  function showValidationPopup(title: string, message: string) {
+    if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
+      globalThis.alert(`${title}\n${message}`);
+      return;
+    }
+
+    Alert.alert(title, message);
+  }
+
 
   const [webDateInput, setWebDateInput] = useState(() => formatDateForWeb(expiresAt));
   const [webTimeInput, setWebTimeInput] = useState(() => formatTimeForWeb(expiresAt));
@@ -177,16 +186,43 @@ export function ListingForm({ canCreate, onCreate }: ListingFormProps) {
     const cleanTitle = title.trim();
     const cleanDescription = description.trim();
     const cleanQuantity = quantity.trim();
+    const rawPrice = price.trim();
     const expiresInHours = toHoursUntilExpiration(expiresAt);
-    const parsedPrice = Number(price.replace(',', '.'));
+    const parsedPrice = Number(rawPrice.replace(',', '.'));
     const normalizedPrice = Number.isNaN(parsedPrice) ? 0 : Math.max(0, parsedPrice);
     const mode = normalizedPrice <= 0 ? 'Donate' : 'Price';
 
-    if (!canCreate || !cleanTitle || !cleanQuantity || isSubmitting) {
+    if (!canCreate || isSubmitting) {
+      return;
+    }
+
+    if (!cleanTitle) {
+      showValidationPopup('Camp obligatoriu', 'Completeaza titlul alimentului.');
+      return;
+    }
+
+    if (!cleanDescription) {
+      showValidationPopup('Camp obligatoriu', 'Completeaza descrierea produsului.');
+      return;
+    }
+
+    if (!cleanQuantity) {
+      showValidationPopup('Camp obligatoriu', 'Completeaza cantitatea.');
+      return;
+    }
+
+    if (!rawPrice) {
+      showValidationPopup('Camp obligatoriu', 'Completeaza pretul in RON (0 pentru donatie).');
+      return;
+    }
+
+    if (Number.isNaN(parsedPrice)) {
+      showValidationPopup('Pret invalid', 'Introdu un numar valid pentru pret (ex: 12.5 sau 12,5).');
       return;
     }
 
     if (expiresAt.getTime() <= Date.now()) {
+      showValidationPopup('Data invalida', 'Alege o data si ora din viitor pentru expirare.');
       setSubmitError('Alege o data si ora din viitor pentru expirare.');
       return;
     }
