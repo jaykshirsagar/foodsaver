@@ -1,10 +1,29 @@
 import { User } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { AppRole, UserProfile } from '../types/auth';
+import { AppRole, ListingInterest, UserProfile } from '../types/auth';
 
 const DEFAULT_LAT = 44.4268;
 const DEFAULT_LNG = 26.1025;
+const KNOWN_INTERESTS: ListingInterest[] = ['Bakery', 'Produce', 'Dairy', 'Prepared'];
+
+function normalizeInterestScores(raw: unknown): Partial<Record<ListingInterest, number>> {
+  if (!raw || typeof raw !== 'object') {
+    return {};
+  }
+
+  const source = raw as Record<string, unknown>;
+  const normalized: Partial<Record<ListingInterest, number>> = {};
+
+  KNOWN_INTERESTS.forEach((interest) => {
+    const value = source[interest];
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      normalized[interest] = value;
+    }
+  });
+
+  return normalized;
+}
 
 function normalizeRole(role: unknown): AppRole {
   if (role === 'admin') {
@@ -31,13 +50,14 @@ export function observeUserProfile(
         return;
       }
 
-      const raw = snapshot.data() as Partial<UserProfile> & { role?: unknown };
+      const raw = snapshot.data() as Partial<UserProfile> & { role?: unknown; interestScores?: unknown };
       callback({
         uid: raw.uid ?? uid,
         email: raw.email ?? '',
         displayName: raw.displayName ?? 'Utilizator FoodSaver',
         role: normalizeRole(raw.role),
         interests: raw.interests ?? ['Bakery', 'Produce', 'Dairy'],
+        interestScores: normalizeInterestScores(raw.interestScores),
         lat: raw.lat ?? DEFAULT_LAT,
         lng: raw.lng ?? DEFAULT_LNG,
       });
@@ -64,6 +84,7 @@ export async function ensureUserProfile(user: User): Promise<void> {
     displayName: fallbackName,
     role: 'utilizator',
     interests: ['Bakery', 'Produce', 'Dairy'],
+    interestScores: {},
     lat: DEFAULT_LAT,
     lng: DEFAULT_LNG,
   };

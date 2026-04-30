@@ -9,6 +9,7 @@ export type UserProfile = {
   displayName: string;
   role: AppRole;
   interests: ListingInterest[];
+  interestScores?: Partial<Record<ListingInterest, number>>;
   lat: number;
   lng: number;
 };
